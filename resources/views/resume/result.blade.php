@@ -4,157 +4,152 @@
     <meta charset="UTF-8">
     <title>Resume Match Result</title>
 
-    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Google Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background: linear-gradient(135deg, #f9fafb, #eef2ff);
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            min-height: 100vh;
         }
 
-        .result-header {
-            padding: 3rem 0;
-            text-align: center;
+        .result-card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
         }
 
-        .skill-badge {
+        .percentage-circle {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
             background: #2563eb;
-            color: white;
-            padding: 0.5rem 1.25rem;
-            border-radius: 999px;
-            font-weight: 600;
-            font-size: 1rem;
-            display: inline-block;
-        }
-
-        .percentage-text {
-            font-size: 3rem;
+            color: #fff;
+            font-size: 2.2rem;
             font-weight: 700;
-            color: #16a34a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: auto;
         }
 
-        .progress {
-            height: 14px;
-            border-radius: 10px;
-        }
-
-        .progress-bar {
-            background: linear-gradient(90deg, #22c55e, #16a34a);
-        }
-
-        .chip {
-            display: inline-block;
-            background: #e0e7ff;
-            color: #1e40af;
-            padding: 0.4rem 0.75rem;
-            border-radius: 999px;
-            font-size: 0.85rem;
-            margin: 0.2rem;
-            font-weight: 500;
-        }
-
-        .start-btn {
-            padding: 0.9rem 2rem;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-radius: 12px;
-        }
-
-        .table thead {
+        .skill-chip {
             background: #f1f5f9;
+            border-radius: 30px;
+            padding: 0.5rem 1rem;
+            margin: 0.3rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .eligible {
+            color: #16a34a;
+            font-weight: 600;
+        }
+
+        .not-eligible {
+            color: #dc2626;
+            font-weight: 600;
         }
     </style>
 </head>
 
 <body>
 
-<!-- HEADER -->
-<section class="result-header">
-    <h1 class="fw-bold mb-2">Resume Analysis Result</h1>
-    <p class="text-muted">Your resume was analyzed against our skill database</p>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
 
-    <div class="mt-3">
-        <span class="skill-badge">
-            Best Match: {{ ucfirst($bestSkill['skill_name']) }}
-        </span>
-    </div>
+            <div class="result-card text-center">
 
-    <div class="mt-4 percentage-text">
-        {{ $bestSkill['percentage'] }}%
-    </div>
+                <h2 class="fw-bold mb-3">Resume Analysis</h2>
 
-    <div class="container mt-3" style="max-width: 500px;">
-        <div class="progress">
-            <div
-                class="progress-bar"
-                style="width: {{ $bestSkill['percentage'] }}%">
+                <!-- Overall Percentage -->
+                <div class="percentage-circle mb-3">
+                    {{ $bestSkill['percentage'] }}%
+                </div>
+
+                <h4 class="mb-2">
+                    Best Match:
+                    <span class="text-primary">{{ ucfirst($bestSkill['skill_name']) }}</span>
+                </h4>
+
+                <!-- Eligibility -->
+                <p class="{{ $isEligible ? 'eligible' : 'not-eligible' }}">
+                    {{ $isEligible ? 'Eligible for Assessment' : 'Not Eligible for Assessment' }}
+                </p>
+
+                <hr>
+
+                <!-- Skills Summary -->
+                <h5 class="fw-semibold mb-3">Detected Skill Matches</h5>
+
+                <div class="d-flex flex-wrap justify-content-center">
+                    @foreach ($results as $index => $row)
+                        <span class="skill-chip">
+                            {{ ucfirst($row['skill_name']) }}
+                            <button
+                                class="btn btn-sm btn-outline-primary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#keywordsModal{{ $index }}">
+                                keywords
+                            </button>
+                        </span>
+                    @endforeach
+                </div>
+                @if ($isEligible)
+                <a href="{{ route('assessment.start') }}"
+                class="btn btn-primary btn-lg px-4 mt-4">
+                Start Assessment
+                </a>
+                @else
+               <p class="text-muted mt-4">
+               Improve your resume with more relevant keywords to qualify.
+               </p>
+              <a href="{{ route('resume.upload') }}" class="btn btn-outline-secondary mt-2">
+               Upload Another Resume
+              </a>
+              @endif
             </div>
         </div>
     </div>
-</section>
+</div>
 
-<!-- CONTENT -->
-<section class="container mb-5">
+<!-- Keyword Modals -->
+@foreach ($results as $index => $row)
+<div class="modal fade" id="keywordsModal{{ $index }}" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
 
-    <!-- MATCHED KEYWORDS -->
-    <div class="mb-5">
-        <h4 class="fw-semibold mb-3">Matched Keywords</h4>
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    {{ ucfirst($row['skill_name']) }} – Matched Keywords
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
 
-        @foreach ($bestSkill['matched_keywords'] as $keyword)
-            <span class="chip">{{ $keyword }}</span>
-        @endforeach
-    </div>
-
-    <!-- ALL SKILLS TABLE -->
-    <div class="mb-5">
-        <h4 class="fw-semibold mb-3">Skill Match Breakdown</h4>
-
-        <div class="table-responsive">
-            <table class="table table-hover align-middle">
-                <thead>
-                    <tr>
-                        <th>Skill</th>
-                        <th>Matched</th>
-                        <th>Total</th>
-                        <th>Percentage</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($results as $row)
-                        <tr>
-                            <td class="fw-semibold">
-                                {{ ucfirst($row['skill_name']) }}
-                            </td>
-                            <td>{{ $row['matched'] }}</td>
-                            <td>{{ $row['total'] }}</td>
-                            <td>
-                                <span class="fw-semibold">
-                                    {{ $row['percentage'] }}%
-                                </span>
-                            </td>
-                        </tr>
+            <div class="modal-body">
+                @if(count($row['matched_keywords']))
+                    @foreach ($row['matched_keywords'] as $kw)
+                        <span class="badge bg-success me-1 mb-1">
+                            {{ $kw }}
+                        </span>
                     @endforeach
-                </tbody>
-            </table>
+                @else
+                    <p class="text-muted">No keywords matched</p>
+                @endif
+            </div>
+
         </div>
     </div>
+</div>
+@endforeach
 
-    <!-- CTA -->
-    <div class="text-center">
-        <form action="{{ route('assessment.ready') }}" method="GET">
-            <input type="hidden" name="skill" value="{{ $bestSkill['skill_name'] }}">
-
-            <button class="btn btn-success start-btn shadow">
-                Start {{ ucfirst($bestSkill['skill_name']) }} Assessment
-            </button>
-        </form>
-    </div>
-
-</section>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 
 </body>
 </html>

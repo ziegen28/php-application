@@ -89,42 +89,38 @@ class ResumeController extends Controller
             ->groupBy('skills.id', 'skills.name')
             ->get();
 
-        if ($matches->isEmpty()) {
-            return back()->with('error', 'No matching skills found.');
-        }
-
         /**
          * ----------------------------------------------------
          * 6. CALCULATE MATCH PERCENTAGE
          * ----------------------------------------------------
          */
-       foreach ($matches as $match) {
+        $finalResults = []; // ✅ FIX 1: initialize array
 
-    // ✅ Get matched keywords for this skill
-    $matchedKeywords = DB::table('skill_keywords')
-        ->where('skill_id', $match->skill_id)
-        ->whereIn('keyword', $result['keywords'])
-        ->pluck('keyword')
-        ->toArray();
+        foreach ($matches as $match) {
 
-    $totalKeywords = DB::table('skill_keywords')
-        ->where('skill_id', $match->skill_id)
-        ->count();
+            $matchedKeywords = DB::table('skill_keywords')
+                ->where('skill_id', $match->skill_id)
+                ->whereIn('keyword', $result['keywords'])
+                ->pluck('keyword')
+                ->toArray();
 
-    $percentage = round(
-        ($match->matched_count / $totalKeywords) * 100,
-        2
-    );
+            $totalKeywords = DB::table('skill_keywords')
+                ->where('skill_id', $match->skill_id)
+                ->count();
 
-    $finalResults[] = [
-        'skill_id' => $match->skill_id,
-        'skill_name' => $match->skill_name,
-        'matched' => $match->matched_count,
-        'total' => $totalKeywords,
-        'percentage' => $percentage,
-        'matched_keywords' => $matchedKeywords // ✅ THIS FIXES THE ERROR
-    ];
-}
+            $percentage = $totalKeywords > 0
+                ? round(($match->matched_count / $totalKeywords) * 100, 2)
+                : 0;
+
+            $finalResults[] = [
+                'skill_id' => $match->skill_id,
+                'skill_name' => $match->skill_name,
+                'matched' => $match->matched_count,
+                'total' => $totalKeywords,
+                'percentage' => $percentage,
+                'matched_keywords' => $matchedKeywords
+            ];
+        }
 
         /**
          * ----------------------------------------------------
@@ -135,16 +131,18 @@ class ResumeController extends Controller
             $b['percentage'] <=> $a['percentage']
         );
 
-        $bestSkill = $finalResults[0];
+        $bestSkill = $finalResults[0] ?? null;
+
+        if (!$bestSkill) {
+            return back()->with('error', 'No skills matched.');
+        }
 
         /**
          * ----------------------------------------------------
-         * 8. APPLY THRESHOLD
+         * 8. ELIGIBILITY CHECK (NO REDIRECT)
          * ----------------------------------------------------
          */
-        if ($bestSkill['percentage'] < 40) {
-            return back()->with('error', 'Resume does not meet assessment criteria.');
-        }
+        $isEligible = $bestSkill['percentage'] >= 40;
 
         /**
          * ----------------------------------------------------
@@ -158,14 +156,14 @@ class ResumeController extends Controller
 
         /**
          * ----------------------------------------------------
-         * 10. REDIRECT TO ASSESSMENT PAGE
+         * 10. SHOW RESULT PAGE (ALWAYS)
          * ----------------------------------------------------
          */
-       return view('resume.result', [
-    'resume' => $resume,
-    'bestSkill' => $bestSkill,
-    'results' => $finalResults
-]);
+        return view('resume.result', [
+            'resume' => $resume,
+            'bestSkill' => $bestSkill,
+            'results' => $finalResults,
+            'isEligible' => $isEligible
+        ]);
     }
 }
-

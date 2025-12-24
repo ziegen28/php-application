@@ -15,7 +15,6 @@
         body {
             font-family: 'Inter', sans-serif;
             background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-            transition: background 0.3s ease;
         }
 
         .upload-container {
@@ -63,7 +62,6 @@
             padding: 0.75rem;
             border-radius: 10px;
             border: none;
-            transition: background 0.2s ease;
         }
 
         .btn-upload:hover {
@@ -82,15 +80,6 @@
             color: #9ca3af;
         }
 
-        /* Light Mode */
-        body.light-mode {
-            background: #f3f4f6;
-        }
-
-        body.light-mode .upload-card {
-            background: #ffffff;
-        }
-
         @keyframes fadeInUp {
             from {
                 opacity: 0;
@@ -105,28 +94,21 @@
 </head>
 
 <body>
+
 <div class="container upload-container d-flex justify-content-center align-items-center">
     <div class="upload-card text-center">
 
-        <!-- Logout Button -->
+        <!-- Logout -->
         <form method="POST" action="{{ route('logout') }}" class="logout-btn">
             @csrf
-            <button class="btn btn-outline-secondary btn-sm">
-                Logout
-            </button>
+            <button class="btn btn-outline-secondary btn-sm">Logout</button>
         </form>
-
-        <!-- Dark / Light Toggle -->
-        <div class="form-check form-switch position-absolute top-0 end-0 m-3">
-            <input class="form-check-input" type="checkbox" id="themeToggle">
-        </div>
 
         <!-- Logo -->
         <div class="mb-3">
-            <img src="{{ asset('images/logo.png') }}" alt="Company Logo" width="80">
+            <img src="{{ asset('images/logo.png') }}" width="80" alt="Logo">
         </div>
 
-        <!-- Title -->
         <h2 class="upload-title">Resume Upload</h2>
         <p class="upload-subtitle">
             Upload your resume in PDF format for assessment
@@ -136,13 +118,24 @@
         <form method="POST" action="{{ route('resume.store') }}" enctype="multipart/form-data">
             @csrf
 
-            <label class="file-input w-100 mb-3">
-                <input type="file" name="resume" accept="application/pdf" hidden required>
-                <strong>Click to select PDF</strong><br>
+            <!-- File Input -->
+            <label class="file-input w-100 mb-2">
+                <input 
+                    type="file"
+                    name="resume"
+                    accept="application/pdf"
+                    hidden
+                    required
+                    id="resumeInput"
+                >
+                <strong id="fileLabel">Click to select PDF</strong><br>
                 <small class="text-muted">Only PDF files are allowed</small>
             </label>
 
-            <button type="submit" class="btn btn-upload w-100">
+            <!-- Selected File Name -->
+            <p id="fileName" class="text-primary fw-semibold mt-2" style="display:none;"></p>
+
+            <button type="submit" class="btn btn-upload w-100 mt-3">
                 Upload Resume
             </button>
 
@@ -151,15 +144,8 @@
                     {{ session('error') }}
                 </div>
             @endif
-
-            @if(session('success'))
-                <div class="alert alert-success mt-3">
-                    {{ session('success') }}
-                </div>
-            @endif
         </form>
 
-        <!-- Footer -->
         <div class="footer-text">
             © {{ date('Y') }} Assessment Platform. All rights reserved by Ziegen LLC.
         </div>
@@ -169,11 +155,18 @@
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Theme Toggle -->
+<!-- File Name Display Script -->
 <script>
-    const toggle = document.getElementById('themeToggle');
-    toggle.addEventListener('change', function () {
-        document.body.classList.toggle('light-mode');
+    const resumeInput = document.getElementById('resumeInput');
+    const fileName = document.getElementById('fileName');
+    const fileLabel = document.getElementById('fileLabel');
+
+    resumeInput.addEventListener('change', function () {
+        if (this.files.length > 0) {
+            fileName.textContent = "Selected file: " + this.files[0].name;
+            fileName.style.display = "block";
+            fileLabel.textContent = "Change PDF";
+        }
     });
 </script>
 

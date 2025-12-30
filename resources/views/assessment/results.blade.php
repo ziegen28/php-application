@@ -2,182 +2,167 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Assessment Result</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Official Assessment Report | {{ config('app.name') }}</title>
 
-    <!-- Bootstrap -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- Google Font -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
+        /* ✅ UI UNCHANGED */
+        :root {
+            --primary-color: #2563eb;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        }
+
         body {
             font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            background: var(--bg-gradient);
             min-height: 100vh;
-            padding: 40px 0;
+            padding: 50px 0;
+            color: #1e293b;
         }
 
         .result-card {
             background: #ffffff;
-            border-radius: 18px;
-            padding: 35px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-            animation: fadeIn 0.6s ease-in-out;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
         }
 
         .score-circle {
-            width: 120px;
-            height: 120px;
+            width: 140px;
+            height: 140px;
             border-radius: 50%;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            margin: auto;
-            font-size: 26px;
-            font-weight: 700;
+            margin: 20px auto;
             color: #fff;
         }
 
-        .pass {
-            background: linear-gradient(135deg, #00b09b, #96c93d);
-        }
+        .pass { background: linear-gradient(135deg, #059669, #10b981); }
+        .fail { background: linear-gradient(135deg, #dc2626, #ef4444); }
 
-        .fail {
-            background: linear-gradient(135deg, #ff416c, #ff4b2b);
-        }
-
-        .question-box {
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 14px;
-            margin-bottom: 12px;
-        }
-
-        .answered {
-            border-left: 6px solid #22c55e;
-        }
-
-        .unanswered {
-            border-left: 6px solid #ef4444;
-        }
-
-        .badge-answer {
-            font-size: 0.8rem;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        @media print {
+            body { background: white; padding: 0; }
+            .no-print { display: none !important; }
+            .result-card { box-shadow: none; border: none; padding: 0; }
         }
     </style>
 </head>
 
 <body>
 
+@php
+    /* ===============================
+       SAFE DATA PREPARATION
+    =============================== */
+    $questionsJson = is_array($assessment->questions_json)
+        ? $assessment->questions_json
+        : json_decode($assessment->questions_json ?? '[]', true);
+
+    $totalQuestions = count($questionsJson);
+
+    $candidate = $assessment->user;
+
+    /* ✅ FIX: Correct dashboard routing */
+    $backRoute = auth()->user()->role === 'admin'
+        ? route('admin.dashboard')
+        : route('user.dashboard');
+
+    /* ✅ LOCK UI (assessment completed) */
+    $locked = $assessment->status === 'completed';
+@endphp
+
 <div class="container">
-    <div class="row justify-content-center">
-        <div class="col-lg-9">
+<div class="row justify-content-center">
+<div class="col-lg-10 col-xl-8">
 
-            <div class="result-card">
+<div class="result-card">
 
-                <!-- HEADER -->
-                <div class="text-center mb-4">
-                    <h2 class="fw-bold mb-1">Assessment Result</h2>
-                    <p class="text-muted mb-0">
-                        Candidate: <strong>{{ auth()->user()->name }}</strong>
-                    </p>
-                </div>
-
-                <!-- SCORE -->
-                <div class="score-circle {{ $assessment->percentage >= 40 ? 'pass' : 'fail' }} mb-3">
-                    {{ $assessment->percentage }}%
-                </div>
-
-                <div class="text-center mb-4">
-                    @if($assessment->percentage >= 40)
-                        <h5 class="text-success fw-bold">PASSED 🎉</h5>
-                    @else
-                        <h5 class="text-danger fw-bold">FAILED ❌</h5>
-                    @endif
-                </div>
-
-                <!-- STATS -->
-                <div class="row text-center mb-4">
-                    <div class="col">
-                        <p class="mb-1 text-muted">Total Questions</p>
-                        <h6>{{ count($assessment->questions_json) }}</h6>
-                    </div>
-                    <div class="col">
-                        <p class="mb-1 text-muted">Correct Answers</p>
-                        <h6>{{ $assessment->correct_answers }}</h6>
-                    </div>
-                    <div class="col">
-                        <p class="mb-1 text-muted">Unanswered</p>
-                        <h6>
-                            {{ count($assessment->questions_json) - count($assessment->answers_json ?? []) }}
-                        </h6>
-                    </div>
-                </div>
-
-                <hr>
-
-                <!-- QUESTION REVIEW -->
-                <h5 class="fw-bold mb-3">Question Review</h5>
-
-                <div style="max-height: 360px; overflow-y: auto; padding-right: 6px;">
-
-                    @php
-                        $answers = $assessment->answers_json ?? [];
-                        $questions = \App\Models\Question::whereIn(
-                            'id',
-                            $assessment->questions_json
-                        )->get();
-                    @endphp
-
-                    @foreach($questions as $index => $q)
-                        @php
-                            $userAnswer = $answers[$q->id] ?? null;
-                        @endphp
-
-                        <div class="question-box {{ $userAnswer ? 'answered' : 'unanswered' }}">
-                            <p class="fw-semibold mb-1">
-                                Q{{ $index + 1 }}. {{ $q->question }}
-                            </p>
-
-                            @if($userAnswer)
-                                <span class="badge bg-info badge-answer">
-                                    Your Answer: {{ strtoupper($userAnswer) }}
-                                </span>
-
-                                <span class="badge bg-success badge-answer ms-1">
-                                    Correct: {{ strtoupper($q->correct_option) }}
-                                </span>
-                            @else
-                                <span class="badge bg-danger badge-answer">
-                                    Not Answered
-                                </span>
-                            @endif
-                        </div>
-                    @endforeach
-
-                </div>
-
-                <!-- ACTION BUTTONS -->
-                <div class="d-flex justify-content-between mt-4">
-                    <a href="{{ route('resume.upload') }}" class="btn btn-outline-secondary">
-                        ⬅ Back to Resume
-                    </a>
-
-                    <a href="{{ route('dashboard') }}" class="btn btn-primary">
-                        Go to Dashboard
-                    </a>
-                </div>
-
-            </div>
-
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h2 class="fw-bold">Assessment Report</h2>
+            <p class="text-muted">Generated on {{ now()->format('M d, Y') }}</p>
+        </div>
+        <div class="text-end">
+            <img src="{{ asset('images/sq1logo.jpg') }}" width="80" alt="Logo">
+            <small class="text-muted d-block">
+                ID: #{{ str_pad($assessment->id, 6, '0', STR_PAD_LEFT) }}
+            </small>
         </div>
     </div>
+
+    <hr>
+
+    <div class="row align-items-center my-4">
+        <div class="col-md-6">
+            <p class="text-muted mb-1">Candidate Name</p>
+            <h4 class="fw-bold">{{ $candidate->name ?? 'Candidate' }}</h4>
+
+            <p class="text-muted mb-1 mt-3">Result</p>
+            <span class="fw-bold {{ $assessment->percentage >= 40 ? 'text-success' : 'text-danger' }}">
+                {{ $assessment->percentage >= 40 ? 'PASSED' : 'FAILED' }}
+            </span>
+
+            <p class="text-muted mt-3">
+                Correct: {{ $assessment->correct_answers }} / {{ $totalQuestions }}
+            </p>
+        </div>
+
+        <div class="col-md-6 text-center">
+            <div class="score-circle {{ $assessment->percentage >= 40 ? 'pass' : 'fail' }}">
+                <small>Score</small>
+                <div class="fs-2 fw-bold">{{ $assessment->percentage }}%</div>
+            </div>
+        </div>
+    </div>
+
+    <h5 class="fw-bold mt-4">Question Performance</h5>
+
+    @php
+        $answers = $assessment->answers_json ?? [];
+        $questions = \App\Models\Question::whereIn('id', $questionsJson)->get();
+    @endphp
+
+    @foreach($questions as $index => $q)
+        @php
+            $userAnswer = $answers[$q->id] ?? null;
+            $isCorrect = $userAnswer && strtolower($userAnswer) === strtolower($q->correct_option);
+        @endphp
+
+        <div class="border rounded p-3 mb-3 {{ $isCorrect ? 'border-success' : 'border-danger' }}">
+            <strong>Q{{ $index + 1 }}:</strong> {{ $q->question }} <br>
+            <small>
+                Your Answer: {{ $userAnswer ? strtoupper($userAnswer) : 'N/A' }} |
+                Correct: {{ strtoupper($q->correct_option) }}
+            </small>
+        </div>
+    @endforeach
+
+    {{-- ✅ ACTIONS LOCKED --}}
+    <div class="d-flex justify-content-between mt-4 no-print">
+        <a href="{{ $backRoute }}" class="btn btn-outline-secondary">
+            Return to Dashboard
+        </a>
+
+        <button onclick="window.print()" class="btn btn-primary">
+            Print / Save PDF
+        </button>
+    </div>
+
+</div>
+
+<p class="text-center text-muted mt-4 small no-print">
+    &copy; {{ date('Y') }} {{ config('app.name') }}
+</p>
+
+</div>
+</div>
 </div>
 
 </body>

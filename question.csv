@@ -1,0 +1,45 @@
+question,option_a,option_b,option_c,option_d,correct_option
+What does HTML stand for?,Hyper Text Markup Language,High Text Machine Language,Hyperlink and Text Markup Language,Home Tool Markup Language,A
+Which tag is used for inserting a line break in HTML?,<br>,<lb>,<break>,<newline>,A
+Which language is used for styling web pages?,HTML,JQuery,CSS,XML,C
+Which is not a programming language?,Python,Java,HTML,C++,C
+What does CSS stand for?,Colorful Style Sheets,Creative Style Sheets,Cascading Style Sheets,Computer Style Sheets,C
+Which symbol is used for comments in PHP?,//,<!-- -->,#,All of the above,D
+Which method is used to send data securely in HTML forms?,GET,POST,PUT,HEAD,B
+What does SQL stand for?,Structured Query Language,Strong Question Language,Structured Question Language,Simple Query Language,A
+Which command is used to create a database in SQL?,CREATE DATABASE,NEW DATABASE,ADD DATABASE,MAKE DATABASE,A
+Which keyword is used to define a function in PHP?,function,def,func,method,A
+Which HTTP status code means Not Found?,200,301,404,500,C
+Which tag is used to display images in HTML?,<image>,<img>,<pic>,<src>,B
+Which operator is used for concatenation in PHP?,+,&,.,*,C
+Which of the following is a frontend framework?,Laravel,Django,React,Flask,C
+Which company developed Java?,Microsoft,Apple,Sun Microsystems,Google,C
+What does API stand for?,Application Programming Interface,Applied Program Interface,Application Process Interface,Advanced Programming Interface,A
+Which database is NoSQL?,MySQL,PostgreSQL,MongoDB,Oracle,C
+Which HTML tag is used to create a hyperlink?,<link>,<a>,<href>,<url>,B
+Which attribute specifies a unique value in HTML?,class,id,name,style,B
+Which keyword is used to inherit a class in Java?,extends,implements,inherits,super,A
+Which data structure uses FIFO?,Stack,Queue,Tree,Graph,B
+Which data structure uses LIFO?,Queue,Array,Stack,Linked List,C
+Which symbol ends a statement in C?,.,:,;,?,C
+Which loop runs at least once?,for,while,do-while,foreach,C
+Which protocol is used for secure web browsing?,HTTP,FTP,SMTP,HTTPS,D
+Which PHP superglobal holds form data?,$_SESSION,$_POST,$_COOKIE,$_GLOBALS,B
+Which tag defines a table row?,<td>,<th>,<tr>,<table>,C
+Which command installs Laravel dependencies?,composer install,php artisan install,laravel install,npm install,A
+Which file stores web routes in Laravel?,routes.php,web.php,route.php,urls.php,B
+Which MVC component handles data logic?,View,Controller,Model,Route,C
+Which function outputs data in PHP?,print(),echo(),display(),Both A and B,D
+Which variable is defined inside a function?,Global,Static,Local,Constant,C
+Which operator checks value and type in PHP?,==,=,===,!=,C
+Which JavaScript keyword declares a constant?,var,let,const,define,C
+Which symbol selects ID in CSS?,.,#,*,%,B
+Which CSS property changes text color?,font-style,color,text-color,background,B
+Which tag creates an unordered list?,<ol>,<ul>,<li>,<list>,B
+Which HTTP method is idempotent?,POST,PUT,GET,CONNECT,C
+Which PHP framework follows MVC?,CodeIgniter,Laravel,Both A and B,None,C
+Which function returns array length in PHP?,size(),count(),length(),array_length(),B
+Which data type stores true or false?,int,string,boolean,float,C
+Which SQL clause filters records?,WHERE,ORDER BY,GROUP BY,SELECT,A
+Which key uniquely identifies a record?,Foreign Key,Primary Key,Composite Key,Index,B
+Which command removes all rows from a table?,DELETE,DRO

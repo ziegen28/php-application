@@ -19,8 +19,17 @@ class Assessment extends Model
 
     protected $casts = [
         'questions_json' => 'array',
-        'answers_json' => 'array',
-        'start_time' => 'datetime',
-        'end_time' => 'datetime',
+        'answers_json'   => 'array',
+        'start_time'     => 'datetime',
+        'end_time'       => 'datetime',
     ];
+
+    /* ===============================
+       RELATIONSHIPS
+    =============================== */
+
+    public function user()
+    {
+        return $this->belongsTo(\App\Models\User::class);
+    }
 }

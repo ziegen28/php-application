@@ -7,45 +7,47 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Resume;
+use App\Models\Assessment;
 
 class ResumeController extends Controller
 {
+    /* ===============================
+       STORE & ANALYZE RESUME
+    =============================== */
     public function store(Request $request)
     {
-        /**
-         * ----------------------------------------------------
-         * 1. VALIDATE RESUME
-         * ----------------------------------------------------
-         */
+        $user = auth()->user();
+
+        /* ❌ LOCK AFTER ASSESSMENT COMPLETION */
+        if (
+            Assessment::where('user_id', $user->id)
+                ->where('status', 'completed')
+                ->exists()
+        ) {
+            return redirect()
+                ->route('user.dashboard')
+                ->with('error', 'Assessment already completed. Resume upload locked.');
+        }
+
+        /* ✅ VALIDATE RESUME */
         $request->validate([
             'resume' => 'required|mimes:pdf|max:2048'
         ]);
 
-        /**
-         * ----------------------------------------------------
-         * 2. STORE RESUME FILE
-         * ----------------------------------------------------
-         */
-        $path = $request->file('resume')->store('resumes');
-
-        if (!Storage::exists($path)) {
-            return back()->with('error', 'Uploaded file not found.');
+        /* ✅ DELETE OLD RESUME FILE */
+        $existing = Resume::where('user_id', $user->id)->first();
+        if ($existing && $existing->file_path) {
+            Storage::delete($existing->file_path);
         }
 
+        /* ✅ STORE NEW FILE */
+        $path = $request->file('resume')->store('resumes');
         $fileContents = Storage::get($path);
 
-        /**
-         * ----------------------------------------------------
-         * 3. CALL FASTAPI MICROSERVICE
-         * ----------------------------------------------------
-         */
-        try {
-            $response = Http::timeout(20)
-                ->attach('file', $fileContents, 'resume.pdf')
-                ->post(config('services.fastapi.url') . '/parse-resume');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Resume parser service is unreachable.');
-        }
+        /* ✅ CALL FASTAPI */
+        $response = Http::timeout(20)
+            ->attach('file', $fileContents, 'resume.pdf')
+            ->post(config('services.fastapi.url') . '/parse-resume');
 
         if (!$response->successful()) {
             return back()->with('error', 'Resume parsing failed.');
@@ -54,115 +56,125 @@ class ResumeController extends Controller
         $result = $response->json();
 
         if (
-            !isset($result['status']) ||
-            $result['status'] !== 'valid' ||
+            ($result['status'] ?? '') !== 'valid' ||
             empty($result['keywords'])
         ) {
             return back()->with('error', 'Invalid or unreadable resume.');
         }
 
-        /**
-         * ----------------------------------------------------
-         * 4. SAVE RESUME RECORD
-         * ----------------------------------------------------
-         */
-        $resume = Resume::create([
-            'user_id' => auth()->id(),
-            'file_path' => $path,
-            'extracted_text' => $result['text'],
-            'status' => 'valid'
-        ]);
+        /* ✅ SAVE RESUME RECORD */
+        $resume = Resume::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'file_path'      => $path,
+                'extracted_text' => $result['text'] ?? '',
+                'status'         => 'valid'
+            ]
+        );
 
-        /**
-         * ----------------------------------------------------
-         * 5. MATCH SKILLS (2NF STRUCTURE)
-         * ----------------------------------------------------
-         */
-        $matches = DB::table('skill_keywords')
-            ->join('skills', 'skills.id', '=', 'skill_keywords.skill_id')
-            ->whereIn('skill_keywords.keyword', $result['keywords'])
-            ->select(
-                'skills.id as skill_id',
-                'skills.name as skill_name',
-                DB::raw('COUNT(skill_keywords.id) as matched_count')
-            )
-            ->groupBy('skills.id', 'skills.name')
-            ->get();
+        /* ===============================
+           SKILL MATCHING (STABLE & SAFE)
+        =============================== */
+        $resumeKeywords = array_unique(
+            array_map('strtolower', $result['keywords'])
+        );
 
-        /**
-         * ----------------------------------------------------
-         * 6. CALCULATE MATCH PERCENTAGE
-         * ----------------------------------------------------
-         */
-        $finalResults = []; // ✅ FIX 1: initialize array
+        $skills = DB::table('skills')->get();
+        $finalResults = [];
 
-        foreach ($matches as $match) {
+        foreach ($skills as $skill) {
 
-            $matchedKeywords = DB::table('skill_keywords')
-                ->where('skill_id', $match->skill_id)
-                ->whereIn('keyword', $result['keywords'])
+            $skillKeywords = DB::table('skill_keywords')
+                ->where('skill_id', $skill->id)
                 ->pluck('keyword')
+                ->map(fn ($k) => strtolower($k))
                 ->toArray();
 
-            $totalKeywords = DB::table('skill_keywords')
-                ->where('skill_id', $match->skill_id)
-                ->count();
+            $matchedKeywords = array_values(
+                array_intersect($skillKeywords, $resumeKeywords)
+            );
 
-            $percentage = $totalKeywords > 0
-                ? round(($match->matched_count / $totalKeywords) * 100, 2)
+            if (empty($matchedKeywords)) {
+                continue;
+            }
+
+            $total = count($skillKeywords);
+            $matched = count($matchedKeywords);
+
+            $percentage = $total > 0
+                ? round(($matched / $total) * 100, 2)
                 : 0;
 
             $finalResults[] = [
-                'skill_id' => $match->skill_id,
-                'skill_name' => $match->skill_name,
-                'matched' => $match->matched_count,
-                'total' => $totalKeywords,
-                'percentage' => $percentage,
-                'matched_keywords' => $matchedKeywords
+                'skill_id'         => $skill->id,
+                'skill_name'       => $skill->name,
+                'matched'          => $matched,
+                'total'            => $total,
+                'percentage'       => $percentage,
+                'matched_keywords' => $matchedKeywords, // ✅ ALWAYS PRESENT
             ];
         }
 
-        /**
-         * ----------------------------------------------------
-         * 7. PICK BEST SKILL
-         * ----------------------------------------------------
-         */
-        usort($finalResults, fn ($a, $b) =>
-            $b['percentage'] <=> $a['percentage']
-        );
-
-        $bestSkill = $finalResults[0] ?? null;
-
-        if (!$bestSkill) {
+        if (empty($finalResults)) {
             return back()->with('error', 'No skills matched.');
         }
 
-        /**
-         * ----------------------------------------------------
-         * 8. ELIGIBILITY CHECK (NO REDIRECT)
-         * ----------------------------------------------------
-         */
-        $isEligible = $bestSkill['percentage'] >= 40;
+        /* ✅ SORT BY BEST MATCH */
+        usort($finalResults, fn ($a, $b) => $b['percentage'] <=> $a['percentage']);
+        $bestSkill = $finalResults[0];
 
-        /**
-         * ----------------------------------------------------
-         * 9. SAVE MATCH RESULT
-         * ----------------------------------------------------
-         */
+        /* ✅ SAVE BEST SKILL */
         $resume->update([
-            'skill_id' => $bestSkill['skill_id'],
+            'skill_id'         => $bestSkill['skill_id'],
             'match_percentage' => $bestSkill['percentage']
         ]);
 
-        /**
-         * ----------------------------------------------------
-         * 10. SHOW RESULT PAGE (ALWAYS)
-         * ----------------------------------------------------
-         */
+        /* ✅ STORE SESSION RESULT */
+        session([
+            'resume_results' => $finalResults
+        ]);
+
+        return redirect()->route('resume.result');
+    }
+
+    /* ===============================
+       SHOW RESUME RESULT
+    =============================== */
+    public function showResult()
+    {
+        $user = auth()->user();
+
+        Resume::where('user_id', $user->id)->firstOrFail();
+
+        $results = session('resume_results');
+
+        if (!$results || !is_array($results)) {
+            return redirect()->route('resume.upload');
+        }
+
+        /* ✅ NORMALIZE (EXTRA SAFETY) */
+        $normalizedResults = [];
+
+        foreach ($results as $row) {
+            $normalizedResults[] = [
+                'skill_id'         => $row['skill_id'] ?? null,
+                'skill_name'       => $row['skill_name'] ?? 'Unknown',
+                'matched'          => $row['matched'] ?? 0,
+                'total'            => $row['total'] ?? 0,
+                'percentage'       => $row['percentage'] ?? 0,
+                'matched_keywords' => $row['matched_keywords'] ?? [],
+            ];
+        }
+
+        $bestSkill = collect($normalizedResults)
+            ->sortByDesc('percentage')
+            ->first();
+
+        $isEligible = $bestSkill && $bestSkill['percentage'] >= 40;
+
         return view('resume.result', [
-            'resume' => $resume,
-            'bestSkill' => $bestSkill,
-            'results' => $finalResults,
+            'bestSkill'  => $bestSkill,
+            'results'    => $normalizedResults,
             'isEligible' => $isEligible
         ]);
     }

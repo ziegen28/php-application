@@ -10,41 +10,47 @@ use App\Models\Question;
 
 class AssessmentController extends Controller
 {
-    /* ===============================
-       BASIC PAGES
-    =============================== */
+    /* ================= BASIC PAGES ================= */
 
     public function showLoginForm()
     {
         return view('login');
     }
 
-    public function index()
-    {
-        return view('dashboard');
-    }
-
     public function uploadresume()
     {
+        if (Assessment::where('user_id', Auth::id())->where('status', 'completed')->exists()) {
+            return redirect()->route('user.dashboard');
+        }
+
         return view('resumeupload');
     }
 
-    /* ===============================
-       ASSESSMENT ENGINE
-    =============================== */
+    public function instructions()
+    {
+        if (Assessment::where('user_id', Auth::id())->where('status', 'completed')->exists()) {
+            return redirect()->route('user.dashboard');
+        }
 
-    // START OR RESUME ASSESSMENT
+        return view('assessment.instructions');
+    }
+
+    /* ================= ASSESSMENT ENGINE ================= */
+
     public function startAssessment()
     {
         $user = Auth::user();
 
-        // Expire old active attempts
+        if (Assessment::where('user_id', $user->id)->where('status', 'completed')->exists()) {
+            return redirect()->route('user.dashboard')
+                ->with('error', 'Assessment already completed.');
+        }
+
         Assessment::where('user_id', $user->id)
             ->where('status', 'active')
             ->where('end_time', '<', now())
             ->update(['status' => 'expired']);
 
-        // Resume existing active attempt
         $active = Assessment::where('user_id', $user->id)
             ->where('status', 'active')
             ->first();
@@ -53,39 +59,32 @@ class AssessmentController extends Controller
             return redirect()->route('assessment.take', $active->id);
         }
 
-        // Create new assessment
-        $questionIds = Question::inRandomOrder()
-            ->limit(20)
-            ->pluck('id')
-            ->toArray();
-
+        $questionIds = Question::inRandomOrder()->limit(20)->pluck('id')->toArray();
         $now = Carbon::now();
 
         $assessment = Assessment::create([
-            'user_id'        => $user->id,
-            'questions_json'=> $questionIds,
-            'answers_json'  => [],
-            'start_time'    => $now,
-            'end_time'      => $now->copy()->addMinutes(20),
-            'status'        => 'active',
+            'user_id'         => $user->id,
+            'questions_json' => $questionIds,
+            'answers_json'   => [],
+            'start_time'     => $now,
+            'end_time'       => $now->copy()->addMinutes(20),
+            'status'         => 'active',
+            'violations'     => 0
         ]);
 
         return redirect()->route('assessment.take', $assessment->id);
     }
 
-    // SHOW QUESTION (ONE AT A TIME)
     public function takeAssessment(Request $request, $id)
     {
         $assessment = Assessment::where('id', $id)
             ->where('user_id', Auth::id())
             ->firstOrFail();
 
-        // If already finished → result
         if ($assessment->status !== 'active') {
             return redirect()->route('assessment.results', $assessment->id);
         }
 
-        // Remaining time (SERVER SIDE)
         $remainingSeconds = now()->diffInSeconds($assessment->end_time, false);
 
         if ($remainingSeconds <= 0) {
@@ -99,85 +98,82 @@ class AssessmentController extends Controller
             return redirect()->route('assessment.results', $assessment->id);
         }
 
-        $question = Question::findOrFail($questions[$index]);
-
-        return view('assessment.start', [
-            'assessment'       => $assessment,
-            'question'         => $question,
-            'index'            => $index,
-            'total'            => count($questions),
-            'remainingSeconds'=> $remainingSeconds,
-        ]);
+        return response()
+            ->view('assessment.start', [
+                'assessment'       => $assessment,
+                'question'         => Question::findOrFail($questions[$index]),
+                'index'            => $index,
+                'remainingSeconds' => $remainingSeconds,
+                'total'            => count($questions)
+            ])
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
-    // SAVE ANSWER (ON NEXT CLICK)
     public function saveAnswer(Request $request, $id)
     {
-        $request->validate([
-            'question_id' => 'required',
-            'answer'      => 'required|in:a,b,c,d',
-        ]);
-
         $assessment = Assessment::where('id', $id)
             ->where('user_id', Auth::id())
+            ->where('status', 'active')
             ->firstOrFail();
-
-        if ($assessment->status !== 'active') {
-            return redirect()->route('assessment.results', $assessment->id);
-        }
 
         $answers = $assessment->answers_json ?? [];
         $answers[$request->question_id] = $request->answer;
 
         $assessment->update(['answers_json' => $answers]);
 
-        return redirect()->route('assessment.take', [
-            $assessment->id,
-            'q' => $request->next_q
-        ]);
+        return response()->noContent();
     }
 
-    // FINAL SUBMIT
     public function submitAssessment($id)
     {
         $assessment = Assessment::where('id', $id)
             ->where('user_id', Auth::id())
+            ->where('status', 'active')
             ->firstOrFail();
-
-        if ($assessment->status !== 'active') {
-            return redirect()->route('assessment.results', $assessment->id);
-        }
 
         $answers = $assessment->answers_json ?? [];
         $questions = Question::whereIn('id', $assessment->questions_json)->get();
 
         $correct = 0;
-
         foreach ($questions as $q) {
             if (($answers[$q->id] ?? null) === $q->correct_option) {
                 $correct++;
             }
         }
 
-        $total = $questions->count();
-        $percentage = $total > 0 ? round(($correct / $total) * 100, 2) : 0;
-
         $assessment->update([
             'correct_answers' => $correct,
-            'percentage'      => $percentage,
+            'percentage'      => round(($correct / max($questions->count(), 1)) * 100, 2),
             'status'          => 'completed',
         ]);
 
         return redirect()->route('assessment.results', $assessment->id);
     }
 
-    // RESULT PAGE
     public function assessmentResult($id)
+    {
+        return view('assessment.results', [
+            'assessment' => Assessment::where('id', $id)
+                ->where('user_id', Auth::id())
+                ->firstOrFail()
+        ]);
+    }
+
+    /* 🔥 FINAL VIOLATION LOGGER */
+    public function logViolation(Request $request, $id)
     {
         $assessment = Assessment::where('id', $id)
             ->where('user_id', Auth::id())
+            ->where('status', 'active')
             ->firstOrFail();
 
-        return view('assessment.results', compact('assessment'));
+        $assessment->increment('violations');
+
+        return response()->json([
+            'message'    => 'Violation recorded',
+            'violations' => $assessment->violations
+        ]);
     }
 }
